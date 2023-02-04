@@ -89,6 +89,12 @@ func (t *Transpiler) Path(fromExt, toExt string) (hops []string, err error) {
 	if fromExt == toExt {
 		return []string{fromExt}, nil
 	}
+	if _, ok := t.ids[fromExt]; !ok {
+		return nil, fmt.Errorf("transpiler: %w from %q to %q", ErrNoPath, fromExt, toExt)
+	}
+	if _, ok := t.ids[toExt]; !ok {
+		return nil, fmt.Errorf("transpiler: %w from %q to %q", ErrNoPath, fromExt, toExt)
+	}
 	best, err := t.graph.Shortest(t.ids[fromExt], t.ids[toExt])
 	if err != nil {
 		return nil, fmt.Errorf("transpiler: %w", err)

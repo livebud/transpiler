@@ -147,3 +147,12 @@ func TestMultiStep(t *testing.T) {
 	is.Equal(hops[1], ".svelte")
 	is.Equal(hops[2], ".jsx")
 }
+
+func TestTranpileSSRJS(t *testing.T) {
+	is := is.New(t)
+	tr := transpiler.New()
+	code, err := tr.Transpile("hello.jsx", ".ssr.js", []byte("<h1>hello</h1>"))
+	is.True(err != nil)
+	is.True(errors.Is(err, transpiler.ErrNoPath))
+	is.Equal(code, nil)
+}
