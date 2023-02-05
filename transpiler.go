@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/RyanCarrier/dijkstra"
 )
@@ -42,9 +43,11 @@ func New() *Transpiler {
 // Transpiler is a generic multi-step tool for transpiling code from one
 // language to another.
 type Transpiler struct {
-	ids   map[string]int                      // ext -> id
-	exts  map[int]string                      // id -> ext
-	fns   map[string][]func(file *File) error // map["ext>ext"][]fns
+	ids  map[string]int                      // ext -> id
+	exts map[int]string                      // id -> ext
+	fns  map[string][]func(file *File) error // map["ext>ext"][]fns
+
+	mu    sync.RWMutex
 	graph *dijkstra.Graph
 }
 
@@ -58,6 +61,12 @@ func edgeKey(fromExt, toExt string) string {
 
 // Add a tranpile function to go from one extension to another.
 func (t *Transpiler) Add(fromExt, toExt string, transpile func(file *File) error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.add(fromExt, toExt, transpile)
+}
+
+func (t *Transpiler) add(fromExt, toExt string, transpile func(file *File) error) {
 	// Add the "from" extension to the graph
 	if _, ok := t.ids[fromExt]; !ok {
 		id := len(t.ids)
@@ -74,7 +83,7 @@ func (t *Transpiler) Add(fromExt, toExt string, transpile func(file *File) error
 	// Add the "to" extension to the graph
 	if _, ok := t.ids[toExt]; !ok {
 		id := len(t.ids)
-		t.ids[toExt] = len(t.ids)
+		t.ids[toExt] = id
 		t.exts[id] = toExt
 		t.graph.AddVertex(id)
 	}
@@ -84,8 +93,14 @@ func (t *Transpiler) Add(fromExt, toExt string, transpile func(file *File) error
 	t.fns[edge] = append(t.fns[edge], transpile)
 }
 
-// Path to go from one extension to another.
 func (t *Transpiler) Path(fromExt, toExt string) (hops []string, err error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.path(fromExt, toExt)
+}
+
+// Path to go from one extension to another.
+func (t *Transpiler) path(fromExt, toExt string) (hops []string, err error) {
 	if fromExt == toExt {
 		return []string{fromExt}, nil
 	}
@@ -105,11 +120,17 @@ func (t *Transpiler) Path(fromExt, toExt string) (hops []string, err error) {
 	return hops, nil
 }
 
-// Transpile the code from one extension to another.
 func (t *Transpiler) Transpile(fromPath, toExt string, code []byte) ([]byte, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.transpile(fromPath, toExt, code)
+}
+
+// Transpile the code from one extension to another.
+func (t *Transpiler) transpile(fromPath, toExt string, code []byte) ([]byte, error) {
 	fromExt := filepath.Ext(fromPath)
 	// Find the shortest path
-	hops, err := t.Path(fromExt, toExt)
+	hops, err := t.path(fromExt, toExt)
 	if err != nil {
 		return nil, err
 	}

@@ -148,7 +148,22 @@ func TestMultiStep(t *testing.T) {
 	is.Equal(hops[2], ".jsx")
 }
 
-func TestTranpileSSRJS(t *testing.T) {
+func TestTranspileSSRJS(t *testing.T) {
+	is := is.New(t)
+	tr := transpiler.New()
+	tr.Add(".svelte", ".ssr.js", func(file *transpiler.File) error {
+		file.Data = []byte(`module.exports = "` + string(file.Data) + `"`)
+		return nil
+	})
+	code, err := tr.Transpile("hello.svelte", ".ssr.js", []byte("<h1>hello</h1>"))
+	is.NoErr(err)
+	is.Equal(string(code), `module.exports = "<h1>hello</h1>"`)
+	code, err = tr.Transpile("hello.svelte", ".ssr.js", []byte("<h1>world</h1>"))
+	is.NoErr(err)
+	is.Equal(string(code), `module.exports = "<h1>world</h1>"`)
+}
+
+func TestTranspileNoPath(t *testing.T) {
 	is := is.New(t)
 	tr := transpiler.New()
 	code, err := tr.Transpile("hello.jsx", ".ssr.js", []byte("<h1>hello</h1>"))
